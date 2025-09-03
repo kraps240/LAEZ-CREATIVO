@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LAEZ.art — Mercado Creativo</title>
+  <meta name="description" content="LAEZ.art: Tu espacio para crear. Mercado creativo de personalizados desde Chiapas."/>
+  <link rel="icon" href="data:,"/>
+  <!-- Tailwind CDN (rápido para prototipos) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 UMD + Babel (para compilar JSX en el navegador) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    /**
+     * LAEZ.art — Mercado Creativo (Build para GitHub Pages)
+     *
+     * NOTAS:
+     * - Este archivo es autocontenido. Sube SOLO este index.html a GitHub y actívalo en Pages.
+     * - Cambia tu número de WhatsApp en CONFIG.whatsappNumber.
+     * - Para un setup profesional, migra luego a Vite + Tailwind JIT + MercadoPago/Firebase.
+     */
+
+    /******************** CONFIG *********************/
+    const CONFIG = {
+      brand: "LAEZ.art — Mercado Creativo",
+      tagline: "Tu espacio para crear",
+      city: "Tuxtla Gutiérrez, Chiapas",
+      whatsappNumber: "5219610000000", // ⬅️ cámbialo por el tuyo
+      business: {
+        spei: { clabe: "646180157000000000", nombre: "LAEZ PERSONALIZADOS" },
+        oxxo: { merchant: "LAEZMX", referenciaBase: "917" },
+      },
+    };
+
+    /******************** DATA *********************/
+    const PRODUCTS = [
+      { id: "taza-11oz", name: "Taza blanca 11oz", category: "Tazas", price: 129,
+        img: "https://images.unsplash.com/photo-1512568400610-62da28bc8a13?q=80&w=1200&auto=format&fit=crop",
+        options: [
+          { id: "frase", type: "text", label: "Nombre / Frase", placeholder: "Ej. Para Julieta" },
+          { id: "color", type: "select", label: "Color interior", choices: [
+            { value: "blanco", label: "Blanco" }, { value: "negro", label: "Negro", extra: 20 }, { value: "rosa", label: "Rosa", extra: 20 }
+          ]},
+          { id: "doble", type: "checkbox", label: "Impresión por ambos lados (+$30)", extra: 30 },
+          { id: "imgRef", type: "file", label: "Sube tu imagen (PNG/JPG)" }
+        ]
+      },
+      { id: "playera-dtf", name: "Playera DTF 100% algodón", category: "Playeras", price: 199,
+        img: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?q=80&w=1200&auto=format&fit=crop",
+        options: [
+          { id: "talla", type: "select", label: "Talla", choices: [
+            { value: "S", label: "S" }, { value: "M", label: "M" }, { value: "L", label: "L (+$10)", extra: 10 }, { value: "XL", label: "XL (+$20)", extra: 20 }
+          ]},
+          { id: "color", type: "select", label: "Color", choices: [
+            { value: "blanca", label: "Blanca" }, { value: "negra", label: "Negra (+$10)", extra: 10 }
+          ]},
+          { id: "area", type: "select", label: "Área de impresión", choices: [
+            { value: "pecho", label: "Pecho (10cm)" }, { value: "frente", label: "Frente completo (+$60)", extra: 60 }
+          ]},
+          { id: "doble", type: "checkbox", label: "Frente + Espalda (+$80)", extra: 80 },
+          { id: "imgRef", type: "file", label: "Diseño (PNG recomendado)" },
+          { id: "nota", type: "textarea", label: "Notas" },
+        ]
+      },
+      { id: "sudadera", name: "Sudadera personalizada", category: "Ropa", price: 399,
+        img: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200&auto=format&fit=crop",
+        options: [
+          { id: "talla", type: "select", label: "Talla", choices: [
+            { value: "S", label: "S" }, { value: "M", label: "M" }, { value: "L", label: "L" }, { value: "XL", label: "XL" }
+          ]},
+          { id: "color", type: "select", label: "Color", choices: [
+            { value: "gris", label: "Gris" }, { value: "negra", label: "Negra" }, { value: "blanca", label: "Blanca" }
+          ]},
+          { id: "imgRef", type: "file", label: "Diseño (PNG/JPG)" },
+        ]
+      },
+    ];
+
+    const FEATURED_IDS = ["taza-11oz", "playera-dtf", "sudadera"];
+
+    /******************** UTILS *********************/
+    const mxn = (n)=> new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0}).format(n||0);
+    const uid = (p="id") => `${p}_${Date.now()}_${Math.floor(Math.random()*9999)}`;
+    const sumExtras = (product, selected)=> (product.options||[]).reduce((acc,opt)=>{
+      const v = selected?.[opt.id];
+      if (opt.type==='checkbox' && v) return acc + (opt.extra||0);
+      if (opt.type==='select'){
+        const ch = (opt.choices||[]).find(c=>c.value===v);
+        return acc + (ch?.extra||0);
+      }
+      return acc;
+    },0);
+    const defaultSelected = (p)=> (p.options||[]).reduce((o,opt)=>{
+      if (opt.type==='checkbox') o[opt.id]=false; else if (opt.type==='select') o[opt.id]=opt.choices?.[0]?.value||""; else o[opt.id]=""; return o;
+    },{});
+
+    /******************** STORAGE (local) *********************/
+    const storage = {
+      read(key, fallback){ try{ return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback)); }catch{ return fallback } },
+      write(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+    };
+
+    /******************** UI PRIMITIVES *********************/
+    function Button({children, className="", ...props}){
+      return <button className={`px-3 py-2 rounded-xl font-semibold ${className}`} {...props}>{children}</button>
+    }
+    function Section({title, children, subtitle}){
+      return (
+        <section className="max-w-6xl mx-auto px-4 py-8">
+          <h2 className="text-2xl font-bold">{title}</h2>
+          {subtitle && <p className="text-gray-600 mt-1">{subtitle}</p>}
+          <div className="mt-4">{children}</div>
+        </section>
+      );
+    }
+
+    /******************** NAV / ROUTER (simple) *********************/
+    function useRouter(){
+      const [view, setView] = React.useState("home"); // home | workshop | catalog | cart | checkout | community
+      const [params, setParams] = React.useState({});
+      const navigate = (v, p={})=>{ setView(v); setParams(p); window.scrollTo({top:0,behavior:'smooth'}); };
+      return { view, params, navigate };
+    }
+
+    /******************** HEADER *********************/
+    function Header({navigate, cartCount}){
+      return (
+        <header className="sticky top-0 z-30 backdrop-blur bg-white/70 border-b">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+            <div onClick={()=>navigate('home')} className="w-10 h-10 rounded-2xl bg-amber-500 text-white grid place-items-center font-black cursor-pointer">LA</div>
+            <div className="flex-1">
+              <div className="font-bold leading-tight">{CONFIG.brand}</div>
+              <div className="text-xs text-gray-600">{CONFIG.tagline} · {CONFIG.city}</div>
+            </div>
+            <nav className="hidden md:flex items-center gap-2 text-sm">
+              <Button className="border" onClick={()=>navigate('catalog')}>Catálogo</Button>
+              <Button className="border" onClick={()=>navigate('workshop')}>Taller Creativo</Button>
+              <Button className="border" onClick={()=>navigate('community')}>Comunidad</Button>
+            </nav>
+            <Button className="ml-auto md:ml-0 relative bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>navigate('cart')}>Carrito ({cartCount})</Button>
+          </div>
+        </header>
+      );
+    }
+
+    /******************** HOME *********************/
+    function Home({navigate}){
+      const featured = PRODUCTS.filter(p=> FEATURED_IDS.includes(p.id));
+      return (
+        <div>
+          {/* Hero */}
+          <section className="bg-gradient-to-b from-amber-50 to-white border-b">
+            <div className="max-w-6xl mx-auto px-4 py-10 grid md:grid-cols-2 gap-6 items-center">
+              <div>
+                <h1 className="text-3xl md:text-4xl font-extrabold leading-tight">Bienvenido a <span className="text-amber-600">{CONFIG.brand}</span></h1>
+                <p className="mt-2 text-gray-700">Un mercado creativo familiar desde Chiapas: combinamos IA y el toque humano de taller. Aquí, tú diseñas y nosotros lo volvemos realidad ✨</p>
+                <div className="mt-4 flex gap-2">
+                  <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>navigate('workshop')}>Crear con IA</Button>
+                  <Button className="border" onClick={()=>navigate('catalog')}>Ver catálogo</Button>
+                </div>
+              </div>
+              <div className="aspect-video bg-white rounded-2xl border overflow-hidden grid place-items-center">
+                <div className="text-center p-6">
+                  <div className="text-7xl">🐰</div>
+                  <div className="mt-2 font-semibold">LAEZ — Hecho con amor y creatividad</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Destacados */}
+          <Section title="Colecciones destacadas" subtitle="Lo que más pide nuestra comunidad">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {featured.map(p=> <ProductCard key={p.id} p={p} onPersonalize={()=>navigate('workshop',{ baseProductId:p.id })} />)}
+            </div>
+          </Section>
+
+          {/* Inspiración */}
+          <InspirationPreview navigate={navigate} />
+        </div>
+      );
+    }
+
+    function ProductCard({p, onPersonalize}){
+      return (
+        <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition overflow-hidden flex flex-col">
+          <div className="aspect-video w-full bg-gray-100 overflow-hidden"><img src={p.img} alt={p.name} className="w-full h-full object-cover"/></div>
+          <div className="p-4 flex-1 flex flex-col">
+            <div className="text-xs uppercase tracking-wide text-amber-600 font-semibold">{p.category}</div>
+            <h3 className="font-semibold text-lg">{p.name}</h3>
+            <div className="mt-1 text-xl font-bold text-gray-800">{mxn(p.price)}</div>
+            <div className="mt-4 flex gap-2">
+              <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white" onClick={onPersonalize}>Personalizar este producto</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /******************** TALLER CREATIVO *********************/
+    function Workshop({navigate, addToCartFromWorkshop, baseProductId}){
+      const base = React.useMemo(()=> PRODUCTS.find(p=>p.id===baseProductId) || PRODUCTS[0], [baseProductId]);
+      const [selected, setSelected] = React.useState(defaultSelected(base));
+      const [tab, setTab] = React.useState("ia"); // ia | upload | text
+      const [designText, setDesignText] = React.useState("");
+      const [designFont, setDesignFont] = React.useState("Impact, sans-serif");
+      const [uploadUrl, setUploadUrl] = React.useState("");
+      const [rot, setRot] = React.useState(0);
+
+      React.useEffect(()=>{ setSelected(defaultSelected(base)); setUploadUrl(""); setDesignText(""); },[base]);
+
+      const extra = sumExtras(base, selected);
+      const unitPrice = base.price + extra;
+
+      const handleFile = (file)=>{ if(!file) return; const url = URL.createObjectURL(file); setUploadUrl(url); };
+
+      const previewOverlay = (
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Imagen subida */}
+          {uploadUrl && <img src={uploadUrl} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[60%] max-w-[70%] object-contain opacity-95"/>}
+          {/* Texto creativo */}
+          {designText && (
+            <div className="absolute left-1/2 top-2/3 -translate-x-1/2 -translate-y-1/2 text-center px-3 py-1 bg-white/70 rounded-lg"
+                 style={{fontFamily:designFont, fontWeight:800, letterSpacing:"0.5px"}}>
+              <div className="text-lg md:text-xl">{designText}</div>
+            </div>
+          )}
+        </div>
+      );
+
+      return (
+        <div>
+          <Section title="Taller Creativo" subtitle="Explora, diseña y prévisualiza en tiempo real">
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Panel creativo */}
+              <div className="bg-white rounded-2xl border p-4 space-y-4">
+                <div className="flex gap-1 p-1 bg-gray-100 rounded-xl text-sm">
+                  {['ia','upload','text'].map(k=> (
+                    <Button key={k} className={`flex-1 ${tab===k? 'bg-amber-600 text-white' : 'bg-white'} `} onClick={()=>setTab(k)}>
+                      {k==='ia'?'Crear con IA':k==='upload'?'Subir tu foto':'Añadir texto'}
+                    </Button>
+                  ))}
+                </div>
+
+                {tab==='ia' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Describe tu idea</label>
+                    <input className="w-full px-3 py-2 rounded-xl border" placeholder="Ej. Conejo grafitero estilo neón con flores de Chiapas" onChange={e=>setDesignText(e.target.value)} />
+                    <p className="text-xs text-gray-500">* Simulación de IA: el texto se usa como composición tipográfica/tema en la vista previa.</p>
+                  </div>
+                )}
+
+                {tab==='upload' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Sube tu imagen o logo</label>
+                    <input type="file" accept="image/*" onChange={e=>handleFile(e.target.files?.[0])} />
+                    <p className="text-xs text-gray-500">PNG con fondo transparente recomendado.</p>
+                  </div>
+                )}
+
+                {tab==='text' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Escribe tu frase</label>
+                    <input className="w-full px-3 py-2 rounded-xl border" onChange={e=>setDesignText(e.target.value)} placeholder="Ej. Crea sin límites"/>
+                    <label className="text-sm font-medium">Fuente</label>
+                    <select className="w-full px-3 py-2 rounded-xl border" value={designFont} onChange={e=>setDesignFont(e.target.value)}>
+                      <option>Impact, sans-serif</option>
+                      <option>Arial Black, sans-serif</option>
+                      <option>Georgia, serif</option>
+                      <option>Courier New, monospace</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  {(base.options||[]).map(opt=> (
+                    <OptionField key={opt.id} opt={opt} value={selected[opt.id]} onChange={(v)=>setSelected(prev=>({...prev,[opt.id]:v}))}
+                      onFilePreview={(id,url)=>setUploadUrl(url)} />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-sm">Rotar vista</span>
+                  <input type="range" min="-30" max="30" value={rot} onChange={e=>setRot(parseInt(e.target.value))} />
+                  <div className="ml-auto font-semibold text-amber-700">Precio: {mxn(unitPrice)}</div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>addToCartFromWorkshop(base, selected, {designText, designFont, uploadUrl})}>Agregar al carrito</Button>
+                  <Button className="border" onClick={()=>navigate('catalog')}>Seguir viendo</Button>
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="bg-gray-50 rounded-2xl border p-4">
+                <div className="relative mx-auto aspect-[4/3] bg-white rounded-2xl border overflow-hidden"
+                     style={{perspective:'1000px'}}>
+                  <div className="absolute inset-6 rounded-xl bg-gradient-to-br from-amber-100 to-white border grid place-items-center shadow-sm"
+                       style={{transform:`rotateY(${rot}deg)`}}>
+                    <img src={base.img} className="absolute inset-0 w-full h-full object-cover opacity-90"/>
+                    {previewOverlay}
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-gray-600">Vista previa simulada tipo 3D (rotación). Para 3D real podemos integrar three.js en la siguiente iteración.</div>
+              </div>
+            </div>
+          </Section>
+        </div>
+      );
+    }
+
+    function OptionField({opt, value, onChange, onFilePreview}){
+      return (
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-700">{opt.label}</label>
+          {opt.type==='text' && (
+            <input className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-amber-500" value={value||""} onChange={e=>onChange(e.target.value)} placeholder={opt.placeholder||''}/>
+          )}
+          {opt.type==='textarea' && (
+            <textarea className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-amber-500" rows={3} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={opt.placeholder||''}></textarea>
+          )}
+          {opt.type==='select' && (
+            <select className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-amber-500" value={value||""} onChange={e=>onChange(e.target.value)}>
+              {(opt.choices||[]).map(ch=> <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+            </select>
+          )}
+          {opt.type==='checkbox' && (
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" checked={!!value} onChange={e=>onChange(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"/>
+              <span className="text-sm text-gray-700">{opt.label}</span>
+            </label>
+          )}
+          {opt.type==='file' && (
+            <div>
+              <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; onChange(f?f.name:""); if(f&&onFilePreview){onFilePreview(opt.id, URL.createObjectURL(f));} }} />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /******************** CATALOGO *********************/
+    function Catalog({navigate, openInWorkshop}){
+      const [query,setQuery]=React.useState("");
+      const [category,setCategory]=React.useState("Todos");
+      const [sort,setSort]=React.useState("popularidad");
+      const categories = ['Todos', ...Array.from(new Set(PRODUCTS.map(p=>p.category)))];
+      const filtered = React.useMemo(()=>{
+        let arr = PRODUCTS.filter(p=> category==='Todos'||p.category===category);
+        if(query.trim()){
+          const q=query.toLowerCase();
+          arr=arr.filter(p=>p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q));
+        }
+        if(sort==='precio-asc') arr=arr.slice().sort((a,b)=>a.price-b.price);
+        if(sort==='precio-desc') arr=arr.slice().sort((a,b)=>b.price-a.price);
+        return arr;
+      },[query,category,sort]);
+
+      return (
+        <div>
+          <Section title="Catálogo" subtitle="Explora los básicos para personalizar">
+            <div className="flex gap-2 mb-4">
+              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar (taza, playera, sudadera...)" className="px-3 py-2 rounded-xl border w-full md:w-80"/>
+              <select value={category} onChange={e=>setCategory(e.target.value)} className="px-3 py-2 rounded-xl border">
+                {categories.map(c=> <option key={c}>{c}</option>)}
+              </select>
+              <select value={sort} onChange={e=>setSort(e.target.value)} className="px-3 py-2 rounded-xl border">
+                <option value="popularidad">Más relevantes</option>
+                <option value="precio-asc">Precio: menor a mayor</option>
+                <option value="precio-desc">Precio: mayor a menor</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filtered.map(p=> <ProductCard key={p.id} p={p} onPersonalize={()=>openInWorkshop(p.id)} />)}
+            </div>
+          </Section>
+        </div>
+      );
+    }
+
+    /******************** CARRITO + CHECKOUT *********************/
+    function CartView({cart, setCart, navigate}){
+      const subtotal = cart.reduce((s,i)=> s + i.unitPrice * i.qty, 0);
+      return (
+        <Section title="Carrito" subtitle="Revisa tus productos personalizados">
+          {cart.length===0 && (
+            <div className="p-8 text-center bg-white rounded-2xl border">Tu carrito está vacío.</div>
+          )}
+          {cart.map((item,idx)=> (
+            <div key={item.id} className="flex items-start gap-3 py-3 border-b border-gray-100">
+              <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden relative">
+                <img src={item.img} className="w-full h-full object-cover"/>
+                {item.design?.uploadUrl && <img src={item.design.uploadUrl} className="absolute inset-1 object-contain mix-blend-multiply"/>}
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-sm">{item.name}</div>
+                <div className="text-xs text-gray-600">{Object.entries(item.selected||{}).filter(([k,v])=> v!=="" && v!==false && v!=null).map(([k,v])=>`${k}: ${v}`).join(" · ")}</div>
+                {item.design?.designText && <div className="text-xs text-amber-700">Texto: “{item.design.designText}”</div>}
+                <div className="mt-1 flex items-center gap-2">
+                  <Button className="border" onClick={()=> setCart(prev=> prev.map((it,i)=> i===idx ? {...it, qty: Math.max(1, it.qty-1)} : it))}>-</Button>
+                  <span className="text-sm">{item.qty}</span>
+                  <Button className="border" onClick={()=> setCart(prev=> prev.map((it,i)=> i===idx ? {...it, qty: it.qty+1} : it))}>+</Button>
+                  <span className="ml-auto font-semibold">{mxn(item.unitPrice * item.qty)}</span>
+                </div>
+              </div>
+              <button className="text-gray-400 hover:text-red-500" onClick={()=> setCart(prev=> prev.filter((_,i)=> i!==idx))}>✕</button>
+            </div>
+          ))}
+          {cart.length>0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-lg font-bold">Subtotal: {mxn(subtotal)}</div>
+              <div className="flex gap-2">
+                <Button className="border" onClick={()=>setCart([])}>Vaciar</Button>
+                <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>navigate('checkout')}>Continuar al pago</Button>
+              </div>
+            </div>
+          )}
+        </Section>
+      );
+    }
+
+    function Checkout({cart, navigate}){
+      const subtotal = cart.reduce((s,i)=> s + i.unitPrice * i.qty, 0);
+      const [ck, setCk] = React.useState({ nombre:"", telefono:"", entrega:"tienda", direccion:"", pago:"spei", comentarios:"" });
+      const [oxxoRef] = React.useState(()=> `${CONFIG.business.oxxo.referenciaBase}${String(Date.now()).slice(-7)}`);
+
+      const resumen = cart.map(i=>{
+        const opts = Object.entries(i.selected||{}).filter(([k,v])=> v!=="" && v!==false && v!=null).map(([k,v])=>`${k}: ${v}`).join(', ');
+        return `• ${i.name} x${i.qty} — ${mxn(i.unitPrice)} c/u${opts?`\n   ${opts}`:''}${i.design?.designText?`\n   Texto: ${i.design.designText}`:''}`;
+      }).join('\n');
+
+      const waLink = () => {
+        const msg = `Hola LAEZ! Quiero hacer este pedido:%0A%0A${encodeURIComponent(resumen)}%0A%0ASubtotal: ${encodeURIComponent(mxn(subtotal))}%0A%0ADatos:%0A- Nombre: ${encodeURIComponent(ck.nombre)}%0A- Tel: ${encodeURIComponent(ck.telefono)}%0A- Entrega: ${encodeURIComponent(ck.entrega==='tienda'?'Recoger en tienda':'Envío local')}${ck.entrega==='envio'?`%0A- Dirección: ${encodeURIComponent(ck.direccion)}`:''}%0A- Pago: ${encodeURIComponent(ck.pago)}%0A%0AComentarios: ${encodeURIComponent(ck.comentarios||'-')}`;
+        return `https://wa.me/${CONFIG.whatsappNumber}?text=${msg}`;
+      };
+
+      return (
+        <Section title="Checkout" subtitle="Paga fácil y seguro">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl border p-4 space-y-3">
+              <div>
+                <label className="text-sm font-medium">Nombre completo</label>
+                <input className="w-full px-3 py-2 rounded-xl border" value={ck.nombre} onChange={e=>setCk({...ck, nombre:e.target.value})}/>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Teléfono (WhatsApp)</label>
+                <input className="w-full px-3 py-2 rounded-xl border" value={ck.telefono} onChange={e=>setCk({...ck, telefono:e.target.value})}/>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Entrega</label>
+                <select className="w-full px-3 py-2 rounded-xl border" value={ck.entrega} onChange={e=>setCk({...ck, entrega:e.target.value})}>
+                  <option value="tienda">Recoger en tienda</option>
+                  <option value="envio">Envío local</option>
+                </select>
+              </div>
+              {ck.entrega==='envio' && (
+                <div>
+                  <label className="text-sm font-medium">Dirección</label>
+                  <input className="w-full px-3 py-2 rounded-xl border" value={ck.direccion} onChange={e=>setCk({...ck, direccion:e.target.value})}/>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium">Pago</label>
+                <select className="w-full px-3 py-2 rounded-xl border" value={ck.pago} onChange={e=>setCk({...ck, pago:e.target.value})}>
+                  <option value="spei">SPEI</option>
+                  <option value="oxxo">Oxxo</option>
+                  <option value="tarjeta">Tarjeta (MP)</option>
+                </select>
+              </div>
+
+              {ck.pago==='spei' && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm">
+                  <div className="font-semibold">Datos para transferencia</div>
+                  <div>CLABE: <span className="font-mono">{CONFIG.business.spei.clabe}</span></div>
+                  <div>Beneficiario: {CONFIG.business.spei.nombre}</div>
+                  <div className="text-xs text-emerald-800 mt-1">Envía tu comprobante por WhatsApp para confirmar.</div>
+                </div>
+              )}
+              {ck.pago==='oxxo' && (
+                <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-sm">
+                  <div className="font-semibold">Pago en OXXO</div>
+                  <div>Referencia: <span className="font-mono">{oxxoRef}</span> ({CONFIG.business.oxxo.merchant})</div>
+                  <div className="text-xs text-orange-800 mt-1">Presenta esta referencia en caja y comparte el ticket por WhatsApp.</div>
+                </div>
+              )}
+              {ck.pago==='tarjeta' && (
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-sm">
+                  <div className="font-semibold">Tarjeta</div>
+                  <div>En la siguiente iteración conectamos <b>Mercado Pago</b> (Checkout Pro).</div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium">Comentarios adicionales</label>
+                <textarea rows={3} className="w-full px-3 py-2 rounded-xl border" value={ck.comentarios} onChange={e=>setCk({...ck, comentarios:e.target.value})}></textarea>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border p-4">
+              <div className="font-semibold mb-2">Resumen</div>
+              <div className="space-y-2 max-h-80 overflow-auto pr-2">
+                {cart.map(i=> (
+                  <div key={i.id} className="flex gap-3 items-start border-b py-2">
+                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden relative">
+                      <img src={i.img} className="w-full h-full object-cover"/>
+                      {i.design?.uploadUrl && <img src={i.design.uploadUrl} className="absolute inset-1 object-contain mix-blend-multiply"/>}
+                    </div>
+                    <div className="text-sm flex-1">
+                      <div className="font-semibold">{i.name} ×{i.qty}</div>
+                      <div className="text-xs text-gray-600">{Object.entries(i.selected||{}).filter(([k,v])=> v!=="" && v!==false && v!=null).map(([k,v])=>`${k}: ${v}`).join(" · ")}</div>
+                      {i.design?.designText && <div className="text-xs text-amber-700">Texto: “{i.design.designText}”</div>}
+                    </div>
+                    <div className="font-semibold">{mxn(i.unitPrice*i.qty)}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-right font-bold">Subtotal: {mxn(subtotal)}</div>
+              <div className="text-xs text-gray-500">* Envío se coordina por chat. Recoge en tienda o envío local en {CONFIG.city}.</div>
+              <div className="mt-3 flex gap-2">
+                <a href={waLink()} target="_blank" className="flex-1 text-center py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Confirmar por WhatsApp</a>
+                <Button className="border" onClick={()=>navigate('cart')}>Volver</Button>
+              </div>
+            </div>
+          </div>
+        </Section>
+      );
+    }
+
+    /******************** COMUNIDAD *********************/
+    function InspirationPreview({navigate}){
+      const posts = storage.read('laez.community', []);
+      return (
+        <Section title="Galería de inspiración" subtitle="Creaciones de nuestra comunidad">
+          {posts.length===0 && <div className="p-6 bg-white border rounded-2xl text-gray-600">Aún no hay publicaciones. ¡Sé el primero en compartir en la sección Comunidad!</div>}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {posts.slice(0,8).map(p=> (
+              <div key={p.id} className="bg-white border rounded-xl overflow-hidden">
+                <div className="aspect-square bg-gray-100 overflow-hidden">
+                  {p.img && <img src={p.img} className="w-full h-full object-cover"/>}
+                </div>
+                <div className="p-2 text-xs">
+                  <div className="font-semibold truncate">{p.title||'Diseño compartido'}</div>
+                  <div className="text-gray-600 truncate">{p.user||'Cliente LAEZ'} • {p.city||'Chiapas'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4">
+            <Button className="border" onClick={()=>navigate('community')}>Ver más & publicar</Button>
+          </div>
+        </Section>
+      );
+    }
+
+    function Community(){
+      const [posts, setPosts] = React.useState(()=> storage.read('laez.community', []));
+      const [form, setForm] = React.useState({ title:"", user:"", city:"", rating:5, img:"" });
+      const handleFile = (f)=>{ if(!f) return; const url = URL.createObjectURL(f); setForm(prev=>({...prev,img:url})); };
+      const publish = ()=>{
+        const p = { ...form, id: uid('post'), createdAt: Date.now() };
+        const updated=[p, ...posts]; setPosts(updated); storage.write('laez.community', updated);
+        setForm({ title:"", user:"", city:"", rating:5, img:"" });
+      };
+      return (
+        <Section title="Comunidad" subtitle="Comparte tu creación y sé parte del muro de la fama">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-1 bg-white border rounded-2xl p-4 space-y-3">
+              <div>
+                <label className="text-sm font-medium">Título</label>
+                <input className="w-full px-3 py-2 rounded-xl border" value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm font-medium">Tu nombre</label>
+                  <input className="w-full px-3 py-2 rounded-xl border" value={form.user} onChange={e=>setForm({...form, user:e.target.value})}/>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Ciudad</label>
+                  <input className="w-full px-3 py-2 rounded-xl border" value={form.city} onChange={e=>setForm({...form, city:e.target.value})}/>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Calificación</label>
+                <input type="range" min={1} max={5} value={form.rating} onChange={e=>setForm({...form, rating:parseInt(e.target.value)})}/>
+                <div className="text-xs text-gray-600">{"⭐".repeat(form.rating)}</div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Imagen</label>
+                <input type="file" accept="image/*" onChange={e=>handleFile(e.target.files?.[0])}/>
+              </div>
+              <Button className="bg-amber-600 hover:bg-amber-700 text-white w-full" onClick={publish}>Publicar</Button>
+            </div>
+            <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
+              {posts.map(p=> (
+                <div key={p.id} className="bg-white border rounded-xl overflow-hidden">
+                  <div className="aspect-square bg-gray-100 overflow-hidden">{p.img && <img src={p.img} className="w-full h-full object-cover"/>}</div>
+                  <div className="p-2 text-xs">
+                    <div className="font-semibold truncate">{p.title||'Diseño compartido'}</div>
+                    <div className="text-gray-600 truncate">{p.user||'Cliente LAEZ'} • {p.city||'Chiapas'}</div>
+                    <div className="text-amber-600">{"⭐".repeat(p.rating||5)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+      );
+    }
+
+    /******************** ROOT APP *********************/
+    function LAEZArt(){
+      const router = useRouter();
+      const [cart, setCart] = React.useState(()=> storage.read('laez.cart', []));
+      React.useEffect(()=>{ storage.write('laez.cart', cart); },[cart]);
+
+      const addToCartFromWorkshop = (product, selected, design)=>{
+        const unitPrice = product.price + sumExtras(product, selected);
+        const item = { id: uid('item'), productId: product.id, name: product.name, img: product.img, selected, unitPrice, qty:1, design };
+        setCart(prev=> [item, ...prev]);
+        router.navigate('cart');
+      };
+
+      const openInWorkshop = (id)=> router.navigate('workshop', { baseProductId:id });
+
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+          <Header navigate={router.navigate} cartCount={cart.reduce((s,i)=>s+i.qty,0)} />
+
+          {router.view==='home' && <Home navigate={router.navigate} />}
+          {router.view==='workshop' && <Workshop navigate={router.navigate} addToCartFromWorkshop={addToCartFromWorkshop} baseProductId={router.params.baseProductId} />}
+          {router.view==='catalog' && <Catalog navigate={router.navigate} openInWorkshop={openInWorkshop} />}
+          {router.view==='cart' && <CartView cart={cart} setCart={setCart} navigate={router.navigate} />}
+          {router.view==='checkout' && <Checkout cart={cart} navigate={router.navigate} />}
+          {router.view==='community' && <Community />}
+
+          <footer className="border-t mt-8">
+            <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-600 flex flex-wrap gap-2 items-center justify-between">
+              <div>© {new Date().getFullYear()} {CONFIG.brand}. Hecho con amor y creatividad 🐰✨</div>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline">Atención por WhatsApp</span>
+                <a target="_blank" className="px-3 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200" href={`https://wa.me/${CONFIG.whatsappNumber}`}>Escríbenos</a>
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // Montar la app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<LAEZArt/>);
+  </script>
+</body>
+</html>
