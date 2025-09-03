@@ -2,28 +2,41 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LAEZ.art — Mercado Creativo</title>
   <meta name="description" content="LAEZ.art: Tu espacio para crear. Mercado creativo de personalizados desde Chiapas."/>
+  <meta name="color-scheme" content="light">
+  <meta property="og:title" content="LAEZ.art — Mercado Creativo">
+  <meta property="og:description" content="Tu espacio para crear: personaliza tazas, playeras y más con el toque IA + taller de Chiapas.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1512568400610-62da28bc8a13?q=80&w=1200&auto=format&fit=crop">
+  <meta property="og:url" content="." />
   <link rel="icon" href="data:,"/>
-  <!-- Tailwind CDN (rápido para prototipos) -->
+  <base href="./">
+  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18 UMD + Babel (para compilar JSX en el navegador) -->
+  <!-- React 18 UMD + Babel (JSX en navegador) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+  <noscript>
+    <div style="padding:1rem; background:#fff3cd; border:1px solid #ffeeba; margin:1rem; border-radius:.75rem;">
+      Necesitas habilitar JavaScript para usar LAEZ.art
+    </div>
+  </noscript>
+
   <div id="root"></div>
 
-  <script type="text/babel">
+  <!-- IMPORTANTE: Babel con presets -->
+  <script type="text/babel" data-presets="env,react">
     /**
-     * LAEZ.art — Mercado Creativo (Build para GitHub Pages)
-     *
-     * NOTAS:
-     * - Este archivo es autocontenido. Sube SOLO este index.html a GitHub y actívalo en Pages.
-     * - Cambia tu número de WhatsApp en CONFIG.whatsappNumber.
-     * - Para un setup profesional, migra luego a Vite + Tailwind JIT + MercadoPago/Firebase.
+     * LAEZ.art — Mercado Creativo (Build GitHub Pages)
+     * - Single-file SPA con Hash Router (evita 404 en Pages).
+     * - Imágenes del usuario guardadas como DataURL (persisten en localStorage).
+     * - Cambia CONFIG.whatsappNumber por el tuyo (incluye 52 si aplica).
      */
 
     /******************** CONFIG *********************/
@@ -31,11 +44,19 @@
       brand: "LAEZ.art — Mercado Creativo",
       tagline: "Tu espacio para crear",
       city: "Tuxtla Gutiérrez, Chiapas",
-      whatsappNumber: "5219610000000", // ⬅️ cámbialo por el tuyo
+      whatsappNumber: "5219610000000", // ⬅️ cámbialo por el tuyo (ej: 521961XXXXXXX)
       business: {
         spei: { clabe: "646180157000000000", nombre: "LAEZ PERSONALIZADOS" },
         oxxo: { merchant: "LAEZMX", referenciaBase: "917" },
       },
+      routesTitles: {
+        home: "Inicio",
+        catalog: "Catálogo",
+        workshop: "Taller Creativo",
+        cart: "Carrito",
+        checkout: "Checkout",
+        community: "Comunidad",
+      }
     };
 
     /******************** DATA *********************/
@@ -45,7 +66,7 @@
         options: [
           { id: "frase", type: "text", label: "Nombre / Frase", placeholder: "Ej. Para Julieta" },
           { id: "color", type: "select", label: "Color interior", choices: [
-            { value: "blanco", label: "Blanco" }, { value: "negro", label: "Negro", extra: 20 }, { value: "rosa", label: "Rosa", extra: 20 }
+            { value: "blanco", label: "Blanco" }, { value: "negro", label: "Negro (+$20)", extra: 20 }, { value: "rosa", label: "Rosa (+$20)", extra: 20 }
           ]},
           { id: "doble", type: "checkbox", label: "Impresión por ambos lados (+$30)", extra: 30 },
           { id: "imgRef", type: "file", label: "Sube tu imagen (PNG/JPG)" }
@@ -81,7 +102,6 @@
         ]
       },
     ];
-
     const FEATURED_IDS = ["taza-11oz", "playera-dtf", "sudadera"];
 
     /******************** UTILS *********************/
@@ -97,14 +117,48 @@
       return acc;
     },0);
     const defaultSelected = (p)=> (p.options||[]).reduce((o,opt)=>{
-      if (opt.type==='checkbox') o[opt.id]=false; else if (opt.type==='select') o[opt.id]=opt.choices?.[0]?.value||""; else o[opt.id]=""; return o;
+      if (opt.type==='checkbox') o[opt.id]=false;
+      else if (opt.type==='select') o[opt.id]=opt.choices?.[0]?.value||"";
+      else o[opt.id]="";
+      return o;
     },{});
-
-    /******************** STORAGE (local) *********************/
     const storage = {
       read(key, fallback){ try{ return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback)); }catch{ return fallback } },
-      write(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+      write(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch{} }
     };
+    const readFileAsDataURL = (file)=> new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=> resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
+    /******************** HASH ROUTER (GitHub Pages friendly) *********************/
+    function useRouter(){
+      const parse = ()=>{
+        const raw = (location.hash||"#home").slice(1);
+        const [view, query] = raw.split("?");
+        const params = Object.fromEntries(new URLSearchParams(query||""));
+        return { view: view||"home", params };
+      };
+      const [{view, params}, setState] = React.useState(parse());
+      React.useEffect(()=>{
+        const onHash = ()=> setState(parse());
+        window.addEventListener("hashchange", onHash);
+        return ()=> window.removeEventListener("hashchange", onHash);
+      },[]);
+      const navigate = (v, p={})=>{
+        const qs = new URLSearchParams(p).toString();
+        location.hash = qs ? `${v}?${qs}` : v;
+        window.scrollTo({top:0,behavior:'smooth'});
+      };
+      // Título por ruta
+      React.useEffect(()=>{
+        const name = CONFIG.routesTitles[view] || "LAEZ";
+        document.title = `${CONFIG.brand} — ${name}`;
+      },[view]);
+      return { view, params, navigate };
+    }
 
     /******************** UI PRIMITIVES *********************/
     function Button({children, className="", ...props}){
@@ -118,14 +172,6 @@
           <div className="mt-4">{children}</div>
         </section>
       );
-    }
-
-    /******************** NAV / ROUTER (simple) *********************/
-    function useRouter(){
-      const [view, setView] = React.useState("home"); // home | workshop | catalog | cart | checkout | community
-      const [params, setParams] = React.useState({});
-      const navigate = (v, p={})=>{ setView(v); setParams(p); window.scrollTo({top:0,behavior:'smooth'}); };
-      return { view, params, navigate };
     }
 
     /******************** HEADER *********************/
@@ -190,7 +236,7 @@
     function ProductCard({p, onPersonalize}){
       return (
         <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition overflow-hidden flex flex-col">
-          <div className="aspect-video w-full bg-gray-100 overflow-hidden"><img src={p.img} alt={p.name} className="w-full h-full object-cover"/></div>
+          <div className="aspect-video w-full bg-gray-100 overflow-hidden"><img src={p.img} alt={p.name} className="w-full h-full object-cover" loading="lazy"/></div>
           <div className="p-4 flex-1 flex flex-col">
             <div className="text-xs uppercase tracking-wide text-amber-600 font-semibold">{p.category}</div>
             <h3 className="font-semibold text-lg">{p.name}</h3>
@@ -218,12 +264,18 @@
       const extra = sumExtras(base, selected);
       const unitPrice = base.price + extra;
 
-      const handleFile = (file)=>{ if(!file) return; const url = URL.createObjectURL(file); setUploadUrl(url); };
+      const handleFile = async (file)=>{
+        if(!file) return;
+        try{
+          const dataUrl = await readFileAsDataURL(file); // ✅ Persiste bien en localStorage
+          setUploadUrl(dataUrl);
+        }catch(e){ console.error(e); }
+      };
 
       const previewOverlay = (
         <div className="absolute inset-0 pointer-events-none">
           {/* Imagen subida */}
-          {uploadUrl && <img src={uploadUrl} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[60%] max-w-[70%] object-contain opacity-95"/>}
+          {uploadUrl && <img src={uploadUrl} alt="diseño" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[60%] max-w-[70%] object-contain opacity-95"/>}
           {/* Texto creativo */}
           {designText && (
             <div className="absolute left-1/2 top-2/3 -translate-x-1/2 -translate-y-1/2 text-center px-3 py-1 bg-white/70 rounded-lg"
@@ -280,7 +332,8 @@
 
                 <div className="grid grid-cols-2 gap-3">
                   {(base.options||[]).map(opt=> (
-                    <OptionField key={opt.id} opt={opt} value={selected[opt.id]} onChange={(v)=>setSelected(prev=>({...prev,[opt.id]:v}))}
+                    <OptionField key={opt.id} opt={opt} value={selected[opt.id]}
+                      onChange={(v)=>setSelected(prev=>({...prev,[opt.id]:v}))}
                       onFilePreview={(id,url)=>setUploadUrl(url)} />
                   ))}
                 </div>
@@ -292,7 +345,8 @@
                 </div>
 
                 <div className="flex gap-2">
-                  <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>addToCartFromWorkshop(base, selected, {designText, designFont, uploadUrl})}>Agregar al carrito</Button>
+                  <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                    onClick={()=>addToCartFromWorkshop(base, selected, {designText, designFont, uploadUrl})}>Agregar al carrito</Button>
                   <Button className="border" onClick={()=>navigate('catalog')}>Seguir viendo</Button>
                 </div>
               </div>
@@ -303,7 +357,7 @@
                      style={{perspective:'1000px'}}>
                   <div className="absolute inset-6 rounded-xl bg-gradient-to-br from-amber-100 to-white border grid place-items-center shadow-sm"
                        style={{transform:`rotateY(${rot}deg)`}}>
-                    <img src={base.img} className="absolute inset-0 w-full h-full object-cover opacity-90"/>
+                    <img src={base.img} alt={base.name} className="absolute inset-0 w-full h-full object-cover opacity-90"/>
                     {previewOverlay}
                   </div>
                 </div>
@@ -316,6 +370,14 @@
     }
 
     function OptionField({opt, value, onChange, onFilePreview}){
+      const onFile = async (file)=>{
+        if(!file){ onChange(""); return; }
+        try{
+          const dataUrl = await readFileAsDataURL(file);
+          onChange(file.name || "archivo");
+          if(onFilePreview) onFilePreview(opt.id, dataUrl);
+        }catch(e){ console.error(e); }
+      };
       return (
         <div className="space-y-1">
           <label className="text-sm font-medium text-gray-700">{opt.label}</label>
@@ -338,7 +400,8 @@
           )}
           {opt.type==='file' && (
             <div>
-              <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; onChange(f?f.name:""); if(f&&onFilePreview){onFilePreview(opt.id, URL.createObjectURL(f));} }} />
+              <input type="file" accept="image/*" onChange={e=>onFile(e.target.files?.[0])} />
+              {value && <div className="text-xs text-gray-500 mt-1 truncate">Archivo: {value}</div>}
             </div>
           )}
         </div>
@@ -395,12 +458,14 @@
           {cart.map((item,idx)=> (
             <div key={item.id} className="flex items-start gap-3 py-3 border-b border-gray-100">
               <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden relative">
-                <img src={item.img} className="w-full h-full object-cover"/>
-                {item.design?.uploadUrl && <img src={item.design.uploadUrl} className="absolute inset-1 object-contain mix-blend-multiply"/>}
+                <img src={item.img} alt={item.name} className="w-full h-full object-cover"/>
+                {item.design?.uploadUrl && <img src={item.design.uploadUrl} alt="diseño" className="absolute inset-1 object-contain mix-blend-multiply"/>}
               </div>
               <div className="flex-1">
                 <div className="font-semibold text-sm">{item.name}</div>
-                <div className="text-xs text-gray-600">{Object.entries(item.selected||{}).filter(([k,v])=> v!=="" && v!==false && v!=null).map(([k,v])=>`${k}: ${v}`).join(" · ")}</div>
+                <div className="text-xs text-gray-600">
+                  {Object.entries(item.selected||{}).filter(([k,v])=> v!=="" && v!==false && v!=null).map(([k,v])=>`${k}: ${v}`).join(" · ")}
+                </div>
                 {item.design?.designText && <div className="text-xs text-amber-700">Texto: “{item.design.designText}”</div>}
                 <div className="mt-1 flex items-center gap-2">
                   <Button className="border" onClick={()=> setCart(prev=> prev.map((it,i)=> i===idx ? {...it, qty: Math.max(1, it.qty-1)} : it))}>-</Button>
@@ -436,8 +501,8 @@
       }).join('\n');
 
       const waLink = () => {
-        const msg = `Hola LAEZ! Quiero hacer este pedido:%0A%0A${encodeURIComponent(resumen)}%0A%0ASubtotal: ${encodeURIComponent(mxn(subtotal))}%0A%0ADatos:%0A- Nombre: ${encodeURIComponent(ck.nombre)}%0A- Tel: ${encodeURIComponent(ck.telefono)}%0A- Entrega: ${encodeURIComponent(ck.entrega==='tienda'?'Recoger en tienda':'Envío local')}${ck.entrega==='envio'?`%0A- Dirección: ${encodeURIComponent(ck.direccion)}`:''}%0A- Pago: ${encodeURIComponent(ck.pago)}%0A%0AComentarios: ${encodeURIComponent(ck.comentarios||'-')}`;
-        return `https://wa.me/${CONFIG.whatsappNumber}?text=${msg}`;
+        const msg = `Hola LAEZ! Quiero hacer este pedido:\n\n${resumen}\n\nSubtotal: ${mxn(subtotal)}\n\nDatos:\n- Nombre: ${ck.nombre}\n- Tel: ${ck.telefono}\n- Entrega: ${ck.entrega==='tienda'?'Recoger en tienda':'Envío local'}${ck.entrega==='envio'?`\n- Dirección: ${ck.direccion}`:''}\n- Pago: ${ck.pago}\n\nComentarios: ${ck.comentarios||'-'}`;
+        return `https://wa.me/${CONFIG.whatsappNumber}?text=${encodeURIComponent(msg)}`;
       };
 
       return (
@@ -509,8 +574,8 @@
                 {cart.map(i=> (
                   <div key={i.id} className="flex gap-3 items-start border-b py-2">
                     <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden relative">
-                      <img src={i.img} className="w-full h-full object-cover"/>
-                      {i.design?.uploadUrl && <img src={i.design.uploadUrl} className="absolute inset-1 object-contain mix-blend-multiply"/>}
+                      <img src={i.img} alt={i.name} className="w-full h-full object-cover"/>
+                      {i.design?.uploadUrl && <img src={i.design.uploadUrl} alt="diseño" className="absolute inset-1 object-contain mix-blend-multiply"/>}
                     </div>
                     <div className="text-sm flex-1">
                       <div className="font-semibold">{i.name} ×{i.qty}</div>
@@ -524,7 +589,7 @@
               <div className="mt-3 text-right font-bold">Subtotal: {mxn(subtotal)}</div>
               <div className="text-xs text-gray-500">* Envío se coordina por chat. Recoge en tienda o envío local en {CONFIG.city}.</div>
               <div className="mt-3 flex gap-2">
-                <a href={waLink()} target="_blank" className="flex-1 text-center py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Confirmar por WhatsApp</a>
+                <a href={waLink()} target="_blank" rel="noopener" className="flex-1 text-center py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Confirmar por WhatsApp</a>
                 <Button className="border" onClick={()=>navigate('cart')}>Volver</Button>
               </div>
             </div>
@@ -543,7 +608,7 @@
             {posts.slice(0,8).map(p=> (
               <div key={p.id} className="bg-white border rounded-xl overflow-hidden">
                 <div className="aspect-square bg-gray-100 overflow-hidden">
-                  {p.img && <img src={p.img} className="w-full h-full object-cover"/>}
+                  {p.img && <img src={p.img} alt={p.title||'Diseño'} className="w-full h-full object-cover"/>}
                 </div>
                 <div className="p-2 text-xs">
                   <div className="font-semibold truncate">{p.title||'Diseño compartido'}</div>
@@ -562,7 +627,7 @@
     function Community(){
       const [posts, setPosts] = React.useState(()=> storage.read('laez.community', []));
       const [form, setForm] = React.useState({ title:"", user:"", city:"", rating:5, img:"" });
-      const handleFile = (f)=>{ if(!f) return; const url = URL.createObjectURL(f); setForm(prev=>({...prev,img:url})); };
+      const handleFile = async (f)=>{ if(!f) return; const url = await readFileAsDataURL(f); setForm(prev=>({...prev,img:url})); };
       const publish = ()=>{
         const p = { ...form, id: uid('post'), createdAt: Date.now() };
         const updated=[p, ...posts]; setPosts(updated); storage.write('laez.community', updated);
@@ -588,7 +653,7 @@
               </div>
               <div>
                 <label className="text-sm font-medium">Calificación</label>
-                <input type="range" min={1} max={5} value={form.rating} onChange={e=>setForm({...form, rating:parseInt(e.target.value)})}/>
+                <input aria-label="Calificación" type="range" min={1} max={5} value={form.rating} onChange={e=>setForm({...form, rating:parseInt(e.target.value)})}/>
                 <div className="text-xs text-gray-600">{"⭐".repeat(form.rating)}</div>
               </div>
               <div>
@@ -600,7 +665,7 @@
             <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
               {posts.map(p=> (
                 <div key={p.id} className="bg-white border rounded-xl overflow-hidden">
-                  <div className="aspect-square bg-gray-100 overflow-hidden">{p.img && <img src={p.img} className="w-full h-full object-cover"/>}</div>
+                  <div className="aspect-square bg-gray-100 overflow-hidden">{p.img && <img src={p.img} alt={p.title||'Diseño'} className="w-full h-full object-cover"/></div>
                   <div className="p-2 text-xs">
                     <div className="font-semibold truncate">{p.title||'Diseño compartido'}</div>
                     <div className="text-gray-600 truncate">{p.user||'Cliente LAEZ'} • {p.city||'Chiapas'}</div>
@@ -645,7 +710,7 @@
               <div>© {new Date().getFullYear()} {CONFIG.brand}. Hecho con amor y creatividad 🐰✨</div>
               <div className="flex items-center gap-2">
                 <span className="hidden sm:inline">Atención por WhatsApp</span>
-                <a target="_blank" className="px-3 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200" href={`https://wa.me/${CONFIG.whatsappNumber}`}>Escríbenos</a>
+                <a target="_blank" rel="noopener" className="px-3 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200" href={`https://wa.me/${CONFIG.whatsappNumber}`}>Escríbenos</a>
               </div>
             </div>
           </footer>
